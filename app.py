@@ -1,4 +1,5 @@
 import sys
+import json
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox
 from PySide6.QtGui import QPixmap
 from player_case import PlayerCase, PlayerCaseTransfer
@@ -59,6 +60,8 @@ class HockeyDraftApp(QMainWindow, Ui_MainWindow):
         }
         self.image_dir = Path("images/")
         self.image_dir.mkdir(exist_ok=True)
+        self.save_dir = Path("saves/")
+        self.save_dir.mkdir(exist_ok=True)
         self.reset_command = "!reset"
         self.action_state = "default"
         self.crt_case: PlayerCase = None
@@ -89,7 +92,7 @@ class HockeyDraftApp(QMainWindow, Ui_MainWindow):
 
         return None
 
-    def add_player(self, player_name: str, season: str, image: QPixmap, player_type: str, position: Literal["roster", "reserve"], role: str, former_team: str):
+    def add_player(self, player_name: str, season: str, image: QPixmap, player_type: str, position: Literal["roster", "reserve"], role: str, former_team: str, image_path: str):
         if position == "roster":
             if player_type == "goalie":
                 selected_case: PlayerCase = self.cases_link_table["goalies"][role]
@@ -99,6 +102,8 @@ class HockeyDraftApp(QMainWindow, Ui_MainWindow):
                     selected_case.season_label.setText(season)
                     selected_case.image_label.setPixmap(image)
                     selected_case.empty = False
+                    selected_case.former_team = former_team
+                    selected_case.image_path = image_path
                     return True
             else:
                 location = role.split(",")
@@ -111,6 +116,7 @@ class HockeyDraftApp(QMainWindow, Ui_MainWindow):
                     selected_case.image_label.setPixmap(image)
                     selected_case.empty = False
                     selected_case.former_team = former_team
+                    selected_case.image_path = image_path
                     return True
         elif position == "reserve":
             selected_case: PlayerCase = self.cases_link_table["reserve"][role][1]
@@ -121,14 +127,16 @@ class HockeyDraftApp(QMainWindow, Ui_MainWindow):
                 selected_case.image_label.setPixmap(image)
                 selected_case.empty = False
                 selected_case.former_team = former_team
+                selected_case.image_path = image_path
                 return True
             elif self.cases_link_table["reserve"][role][2].empty:
-                second_case = self.cases_link_table["reserve"][role][2]
+                second_case: PlayerCase = self.cases_link_table["reserve"][role][2]
                 second_case.player_name_label.setText(player_name)
                 second_case.season_label.setText(season)
                 second_case.image_label.setPixmap(image)
                 second_case.empty = False
                 second_case.former_team = former_team
+                second_case.image_path = image_path
                 return True
 
         return False
@@ -146,7 +154,7 @@ class HockeyDraftApp(QMainWindow, Ui_MainWindow):
 
     def add_player_with_message_cache(self, message_cache: dict[str, str]):
         return self.add_player(message_cache["player_name"], message_cache["season"],
-                        QPixmap(message_cache["image_path"]), self.message_cache["type"], self.message_cache["position"], self.message_cache["role"], self.message_cache["former_team"])
+                        QPixmap(message_cache["image_path"]), self.message_cache["type"], self.message_cache["position"], self.message_cache["role"], self.message_cache["former_team"], self.message_cache["image_path"])
 
     def append_chat_message(self, role: str, message: str):
         self.chat_widget.appendPlainText(f"\n({role}) {message}")
@@ -158,10 +166,54 @@ class HockeyDraftApp(QMainWindow, Ui_MainWindow):
             self.chat_widget.appendPlainText("\n\n")
             self.append_chat_message(self.robot_role, "To begin, I'll need the name of the player you'd like, please. 🙂")
 
+    def commands(self, message_input_text: str):
+        if "!save" in message_input_text:
+            arg = message_input_text.replace("!save ", "") + ".json"
+            path = Path("saves/") / arg
+            save_content = {}
+
+            for case in self.cases_list:
+                save_content[case.objectName()] = {
+                    "player_name": case.player_name_label.text(),
+                    "former_team": case.former_team,
+                    "season": case.season_label.text(),
+                    "empty": case.empty,
+                    "image_path": case.image_path
+                }
+
+            path.write_text(json.dumps(save_content, indent=4, default=str), encoding="utf-8")
+
+            self.message_state = -1
+            self.clear_message_cache()
+            self.chat_widget.appendPlainText("\n\n")
+            self.append_chat_message(self.robot_role, "To begin, I'll need the name of the player you'd like, please. 🙂")
+        elif "!load" in message_input_text:
+            arg = message_input_text.replace("!load ", "") + ".json"
+            path = Path("saves/") / arg
+            save_content_raw = path.read_text(encoding="utf-8")
+            save_content: dict = json.loads(save_content_raw)
+
+            for key in save_content.keys():
+                case: PlayerCase = self.findChild(PlayerCase, name=key)
+
+                case.player_name_label.setText(save_content[key]["player_name"])
+                case.season_label.setText(save_content[key]["season"])
+                case.empty = save_content[key]["empty"]
+                case.former_team = save_content[key]["former_team"]
+                case.image_path = save_content[key]["image_path"]
+                case.image_label.setPixmap(QPixmap(save_content[key]["image_path"]))
+
+            self.message_state = -1
+            self.clear_message_cache()
+            self.chat_widget.appendPlainText("\n\n")
+            self.append_chat_message(self.robot_role, "To begin, I'll need the name of the player you'd like, please. 🙂")
+
+
     def send_message(self):
         message = self.message_input.text()
         self.message_input.setText("")
 
+        self.commands(message)
         self.reset_with_if(message, self.reset_command)
 
         if self.message_state == 0:

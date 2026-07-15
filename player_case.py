@@ -14,6 +14,7 @@ class PlayerCase(QFrame):
         self.image_label: QLabel = None
         self.former_team = ""
         self.empty = True
+        self.image_path = ""
 
         self.transfer_function: Callable[[PlayerCase, PlayerCase], None] = print
         self.change_role_trigger_function: Callable[[PlayerCase], None] = print
@@ -42,6 +43,7 @@ class PlayerCase(QFrame):
         self.image_label.setPixmap(transfer.image)
         self.empty = transfer.empty
         self.former_team = transfer.former_team
+        self.image_path = transfer.image_path
 
     def clear(self):
         self.empty = True
@@ -118,13 +120,14 @@ class PlayerCase(QFrame):
 
 
 class PlayerCaseTransfer:
-    def __init__(self, player_name: str, season: str, image: QPixmap, empty: bool, former_team: str):
+    def __init__(self, player_name: str, season: str, image: QPixmap, empty: bool, former_team: str, image_path: str):
         self.player_name = player_name
         self.season = season
         self.image = image
         self.empty = empty
         self.former_team = former_team
+        self.image_path = image_path
 
     @staticmethod
     def from_player_case(player_case:PlayerCase):
-        return PlayerCaseTransfer(player_case.player_name_label.text(), player_case.season_label.text(), player_case.image_label.pixmap(), player_case.empty, player_case.former_team)
+        return PlayerCaseTransfer(player_case.player_name_label.text(), player_case.season_label.text(), player_case.image_label.pixmap(), player_case.empty, player_case.former_team, player_case.image_path)
